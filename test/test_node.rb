@@ -2,6 +2,8 @@ require "test/unit"
 require "zodiac-consensus/node"
 require "zodiac-consensus/log_entry"
 
+require "zodiac-consensus/test"
+
 class TestZodiacConsensusNode < Test::Unit::TestCase
   def new_node(id)
     ZodiacConsensus::Node.new(id)
