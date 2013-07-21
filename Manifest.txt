@@ -1,0 +1,8 @@
+.autotest
+History.txt
+Manifest.txt
+README.txt
+Rakefile
+bin/zodiac/consensus
+lib/zodiac/consensus.rb
+test/test_zodiac/consensus.rb
