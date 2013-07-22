@@ -1,4 +1,4 @@
-module ZodiacConsensus
+module ZodiacPrime
   class LogEntry
     def initialize(term, command)
       @term = term

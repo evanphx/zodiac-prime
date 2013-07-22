@@ -3,6 +3,8 @@ History.txt
 Manifest.txt
 README.txt
 Rakefile
-bin/zodiac/consensus
-lib/zodiac/consensus.rb
-test/test_zodiac/consensus.rb
+lib/zodiac-prime.rb
+lib/zodiac-prime/log_entry.rb
+lib/zodiac-prime/node.rb
+lib/zodiac-prime/test.rb
+test/test_node.rb

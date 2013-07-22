@@ -1,1 +1,0 @@
-require 'zodiac-consensus/node'

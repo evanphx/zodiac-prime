@@ -1,4 +1,4 @@
-module ZodiacConsensus
+module ZodiacPrime
   class Node
     def initialize(id, handler)
       @node_id = id

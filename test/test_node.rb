@@ -1,18 +1,18 @@
 require "test/unit"
-require "zodiac-consensus/node"
-require "zodiac-consensus/log_entry"
+require "zodiac-prime/node"
+require "zodiac-prime/log_entry"
 
-require "zodiac-consensus/test"
+require "zodiac-prime/test"
 
-class TestZodiacConsensusNode < Test::Unit::TestCase
+class TestZodiacPrimeNode < Test::Unit::TestCase
   def new_node(id)
-    ZodiacConsensus::Node.new(id, @handler)
+    ZodiacPrime::Node.new(id, @handler)
   end
 
   attr_accessor :node
 
   def log_entry(term, command=nil)
-    ZodiacConsensus::LogEntry.new(term, command)
+    ZodiacPrime::LogEntry.new(term, command)
   end
 
   def setup
