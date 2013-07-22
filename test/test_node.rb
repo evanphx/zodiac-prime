@@ -6,7 +6,7 @@ require "zodiac-prime/test"
 
 class TestZodiacPrimeNode < Test::Unit::TestCase
   def new_node(id)
-    ZodiacPrime::Node.new(id, @handler, @timer)
+    ZodiacPrime::Node.new(id, @handler, @timer, @cluster)
   end
 
   attr_accessor :node
@@ -17,14 +17,27 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
 
   StubTimer = Struct.new(:next)
 
+  class StubCluster
+    def initialize
+      @leader_request = nil
+    end
+
+    attr_reader :leader_request
+
+    def broadcast_vote_request(opts)
+      @leader_request = opts
+    end
+  end
+
   def setup
+    @cluster = StubCluster.new
     @timer = StubTimer.new
     @handler = []
     @node = new_node(0)
   end
 
   def test_state
-    n = @node
+    n = node
     assert_equal 0, n.node_id
     assert_equal 0, n.current_term
     assert_equal nil, n.voted_for
@@ -32,7 +45,7 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
   end
 
   def test_request_vote_issues_vote
-    res = @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    res = node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
     assert_equal 1, res[:term]
     assert_equal true, res[:vote_granted]
 
@@ -41,8 +54,8 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
   end
 
   def test_request_vote_from_stale
-    @node.current_term = 2
-    res = @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    node.current_term = 2
+    res = node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
     assert_equal 2, res[:term]
     assert_equal false, res[:vote_granted]
 
@@ -51,8 +64,8 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
   end
 
   def test_request_vote_from_same_term
-    @node.current_term = 1
-    res = @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    node.current_term = 1
+    res = node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
     assert_equal 1, res[:term]
     assert_equal true, res[:vote_granted]
 
@@ -61,31 +74,31 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
   end
 
   def test_request_vote_resets_role_to_follower_on_higher_term
-    @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
   
-    assert_equal :follower, @node.role
+    assert_equal :follower, node.role
   end
 
   def test_request_vote_doesnt_change_voted_for_with_outstanding_vote
-    @node.voted_for = 2
-    @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    node.voted_for = 2
+    node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
 
-    assert_equal 2, @node.voted_for
+    assert_equal 2, node.voted_for
   end
 
   def test_request_vote_fails_if_local_log_last_entry_has_higher_term
-    @node = new_node(1)
-    @node.log = [log_entry(1)]
+    node = new_node(1)
+    node.log = [log_entry(1)]
 
-    res = @node.request_vote :term => 2, :candidate_id => 1, :last_log_index => 1, :last_log_term => 0
+    res = node.request_vote :term => 2, :candidate_id => 1, :last_log_index => 1, :last_log_term => 0
 
     assert_equal false, res[:vote_granted]
   end
 
   def test_request_vote_fails_if_local_log_is_longer
-    @node.log = [log_entry(0), log_entry(0)]
+    node.log = [log_entry(0), log_entry(0)]
 
-    res = @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    res = node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
 
     assert_equal false, res[:vote_granted]
   end
@@ -94,25 +107,25 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     t = Time.now + 0.200
     @timer.next = t
 
-    @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+    node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
 
-    assert_equal t, @node.election_timeout
+    assert_equal t, node.election_timeout
   end
 
   ## append_entries
 
   def test_append_entries_ignores_outdated_term
-    @node.current_term = 1
+    node.current_term = 1
 
-    res = @node.append_entries :term => 0
+    res = node.append_entries :term => 0
 
     assert_equal false, res[:success]
   end
 
   def test_append_entries_updates_current_term_when_greater
-    @node.append_entries :term => 1
+    node.append_entries :term => 1
 
-    assert_equal 1, @node.current_term
+    assert_equal 1, node.current_term
   end
 
   def test_append_entries_resets_state_to_follower
@@ -176,7 +189,90 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     node.append_entries :term => 1, :prev_log_index => 0,
                                     :prev_log_term => 0
 
-    assert_equal t, @node.election_timeout
+    assert_equal t, node.election_timeout
+  end
+
+  def test_become_candidate_broadcasts_votes
+    node.log = [log_entry(0)]
+    node.become_candidate
+
+    req = @cluster.leader_request
+
+    assert_equal node.current_term, req[:term]
+    assert_equal node.node_id, req[:candidate_id]
+    assert_equal 0, req[:last_log_index]
+    assert_equal 0, req[:last_log_term]
+  end
+
+  def test_become_candidate_broadcasts_votes_when_empty
+    node.become_candidate
+
+    req = @cluster.leader_request
+
+    assert_equal node.current_term, req[:term]
+    assert_equal node.node_id, req[:candidate_id]
+    assert_equal nil, req[:last_log_index]
+    assert_equal nil, req[:last_log_term]
+  end
+
+  ## tick
+
+  def test_tick_timeout_follower_to_candidate
+    node.role = :follower
+    node.election_timeout = Time.now - 1
+
+    t = Time.now + 2
+    @timer.next = t
+
+    node.tick
+
+    assert_equal :candidate, node.role
+    assert_equal 1, node.current_term
+    assert_equal t, node.election_timeout
+  end
+
+  def test_tick_broadcasts_vote_requests_on_becoming_candidate
+    node.role = :follower
+    node.election_timeout = Time.now - 1
+
+    t = Time.now + 2
+    @timer.next = t
+
+    node.tick
+
+    assert @cluster.leader_request, "no request broadcast"
+  end
+
+  def test_tick_timeout_on_canidate_restarts_election
+    node.role = :candidate
+    node.election_timeout = Time.now - 1
+
+    node.tick
+
+    assert_equal :candidate, node.role
+    assert_equal 1, node.current_term
+  end
+
+  def test_tick_broadcasts_vote_requests_on_candidate_reelection
+    node.role = :candidate
+    node.election_timeout = Time.now - 1
+
+    t = Time.now + 2
+    @timer.next = t
+
+    node.tick
+
+    assert @cluster.leader_request, "no request broadcast"
+  end
+
+  def test_tick_does_nothing_on_leader
+    node.role = :leader
+    node.election_timeout = Time.now - 1
+
+    node.tick
+
+    assert_equal :leader, node.role
+    assert_equal 0, node.current_term
   end
 
 end

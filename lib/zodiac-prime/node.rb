@@ -1,9 +1,10 @@
 module ZodiacPrime
   class Node
-    def initialize(id, handler, timer)
+    def initialize(id, handler, timer, cluster)
       @node_id = id
       @handler = handler
       @timer = timer
+      @cluster = cluster
 
       @current_term = 0
       @voted_for = nil
@@ -77,6 +78,30 @@ module ZodiacPrime
       end
 
       { :success => true }
+    end
+
+    def tick
+      case @role
+      when :follower, :candidate
+        if @election_timeout and Time.now > @election_timeout
+          become_candidate
+        end
+      end
+    end
+
+    def become_candidate
+      @role = :candidate
+      @current_term += 1
+      @election_timeout = @timer.next
+
+      opts = {
+        :term => @current_term,
+        :candidate_id => @node_id,
+        :last_log_index => (@log.empty? ? nil : @log.size - 1),
+        :last_log_term  => (@log.empty? ? nil : @log.last.term)
+      }
+
+      @cluster.broadcast_vote_request opts
     end
   end
 end
