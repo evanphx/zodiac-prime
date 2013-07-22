@@ -103,5 +103,18 @@ module ZodiacPrime
 
       @cluster.broadcast_vote_request opts
     end
+
+    def become_follower
+      @role = :follower
+      @election_timeout = @timer.next
+    end
+
+    def election_update(election)
+      if election.highest_term > @current_term
+        become_follower
+      elsif election.won?
+        @role = :leader
+      end
+    end
   end
 end

@@ -275,4 +275,45 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     assert_equal 0, node.current_term
   end
 
+  ## election update
+
+  def test_election_update_when_won_changes_to_leader
+    e = ZodiacPrime::Election.new(3)
+    e.receive_vote 1, :term => 0, :vote_granted => true
+    e.receive_vote 2, :term => 0, :vote_granted => true
+    node.role = :candidate
+
+    node.election_update e
+
+    assert_equal :leader, node.role
+  end
+
+  def test_election_update_when_higher_term_detected
+    e = ZodiacPrime::Election.new(3)
+    e.receive_vote 1, :term => 0, :vote_granted => true
+    e.receive_vote 2, :term => 1, :vote_granted => true
+    node.role = :candidate
+
+    node.election_update e
+
+    assert_equal :follower, node.role
+  end
+
+  ## become_follower
+
+  def test_become_follower_sets_role
+    node.role = :candidate
+    node.become_follower
+
+    assert_equal :follower, node.role
+  end
+
+  def test_become_follower_resets_election_timeout
+    t = Time.now + 2
+    @timer.next = t
+
+    node.become_follower
+    assert_equal t, node.election_timeout
+  end
+  
 end
