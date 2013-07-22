@@ -1,17 +1,22 @@
 module ZodiacPrime
   class Node
-    def initialize(id, handler)
+    def initialize(id, handler, timer)
       @node_id = id
       @handler = handler
+      @timer = timer
+
       @current_term = 0
       @voted_for = nil
       @log = []
       @role = :follower
       @last_commit = nil
+
+      @election_timeout = timer.next
     end
 
     attr_reader :node_id
     attr_reader :current_term, :voted_for, :log, :role, :last_commit
+    attr_reader :election_timeout
 
     def valid_vote?(opts)
       return false if opts[:term] < @current_term
@@ -32,6 +37,7 @@ module ZodiacPrime
         return { :term => @current_term, :vote_granted => false }
       end
 
+      @election_timeout = @timer.next
       @voted_for = opts[:candidate_id]
       @current_term = opts[:term]
       { :term => @current_term, :vote_granted => true }
@@ -44,6 +50,8 @@ module ZodiacPrime
 
       @current_term = opts[:term]
       @role = :follower
+
+      @election_timeout = @timer.next
 
       unless @log.empty?
         if @log[opts[:prev_log_index]].term != opts[:prev_log_term]

@@ -6,7 +6,7 @@ require "zodiac-prime/test"
 
 class TestZodiacPrimeNode < Test::Unit::TestCase
   def new_node(id)
-    ZodiacPrime::Node.new(id, @handler)
+    ZodiacPrime::Node.new(id, @handler, @timer)
   end
 
   attr_accessor :node
@@ -15,7 +15,10 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     ZodiacPrime::LogEntry.new(term, command)
   end
 
+  StubTimer = Struct.new(:next)
+
   def setup
+    @timer = StubTimer.new
     @handler = []
     @node = new_node(0)
   end
@@ -87,6 +90,15 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     assert_equal false, res[:vote_granted]
   end
 
+  def test_request_vote_resets_election_timer
+    t = Time.now + 0.200
+    @timer.next = t
+
+    @node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
+
+    assert_equal t, @node.election_timeout
+  end
+
   ## append_entries
 
   def test_append_entries_ignores_outdated_term
@@ -156,4 +168,15 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
 
     assert_equal [:b], @handler
   end
+
+  def test_append_entries_resets_election_timer
+    t = Time.now + 0.200
+    @timer.next = t
+
+    node.append_entries :term => 1, :prev_log_index => 0,
+                                    :prev_log_term => 0
+
+    assert_equal t, @node.election_timeout
+  end
+
 end
