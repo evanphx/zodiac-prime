@@ -3,6 +3,7 @@ require "zodiac-prime/node"
 require "zodiac-prime/log_entry"
 
 require "zodiac-prime/test"
+require "zodiac-prime/election"
 
 class TestZodiacPrimeNode < Test::Unit::TestCase
   def new_node(id)
@@ -15,7 +16,18 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     ZodiacPrime::LogEntry.new(term, command)
   end
 
-  StubTimer = Struct.new(:next)
+  class StubTimer
+    attr_writer :next
+
+    def initialize
+      @next = nil
+    end
+
+    def next
+      v, @next = @next, nil
+      v
+    end
+  end
 
   class StubCluster
     def initialize
@@ -74,9 +86,15 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
   end
 
   def test_request_vote_resets_role_to_follower_on_higher_term
+    node.role = :candidate
+
+    t = Time.now + 2
+    @timer.next = t
+
     node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
   
     assert_equal :follower, node.role
+    assert_equal t, node.election_timeout
   end
 
   def test_request_vote_doesnt_change_voted_for_with_outstanding_vote
@@ -101,6 +119,18 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     res = node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
 
     assert_equal false, res[:vote_granted]
+  end
+
+  def test_request_vote_resets_to_follower_even_if_log_check_fails
+    node = new_node(1)
+    node.role = :candidate
+
+    node.log = [log_entry(1)]
+
+    res = node.request_vote :term => 2, :candidate_id => 1, :last_log_index => 1, :last_log_term => 0
+
+    assert_equal false, res[:vote_granted]
+    assert_equal :follower, node.role
   end
 
   def test_request_vote_resets_election_timer
@@ -129,11 +159,15 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
   end
 
   def test_append_entries_resets_state_to_follower
+    t = Time.now + 2
+    @timer.next = t
+
     node.role = :leader
     node.append_entries :term => 1, :prev_log_index => 0,
                                     :prev_log_term => 0
 
     assert_equal :follower, node.role
+    assert_equal t, node.election_timeout
   end
 
   def test_append_entries_fails_if_prev_term_check_fails
@@ -294,9 +328,13 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     e.receive_vote 2, :term => 1, :vote_granted => true
     node.role = :candidate
 
+    t = Time.now + 2
+    @timer.next = t
+
     node.election_update e
 
     assert_equal :follower, node.role
+    assert_equal t, node.election_timeout
   end
 
   ## become_follower

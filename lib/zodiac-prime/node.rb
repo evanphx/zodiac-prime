@@ -9,10 +9,9 @@ module ZodiacPrime
       @current_term = 0
       @voted_for = nil
       @log = []
-      @role = :follower
       @last_commit = nil
 
-      @election_timeout = timer.next
+      become_follower
     end
 
     attr_reader :node_id
@@ -23,6 +22,10 @@ module ZodiacPrime
       return false if opts[:term] < @current_term
       return false if @voted_for and opts[:candidate_id] != @voted_for
 
+      true
+    end
+
+    def valid_log?(opts)
       if !@log.empty?
         return false if @log.last.term > opts[:last_log_term]
         return false if @log.size - 1 > opts[:last_log_index]
@@ -38,9 +41,23 @@ module ZodiacPrime
         return { :term => @current_term, :vote_granted => false }
       end
 
-      @election_timeout = @timer.next
+      reset_timer = false
+      if opts[:term] > @current_term
+        @current_term = opts[:term]
+        if @role != :follower
+          become_follower
+          reset_timer = true
+        end
+      end
+
+      unless valid_log?(opts)
+        return { :term => @current_term, :vote_granted => false }
+      end
+
+      @election_timeout = @timer.next unless reset_timer
       @voted_for = opts[:candidate_id]
       @current_term = opts[:term]
+
       { :term => @current_term, :vote_granted => true }
     end
 
@@ -50,9 +67,8 @@ module ZodiacPrime
       end
 
       @current_term = opts[:term]
-      @role = :follower
 
-      @election_timeout = @timer.next
+      become_follower
 
       unless @log.empty?
         if @log[opts[:prev_log_index]].term != opts[:prev_log_term]
