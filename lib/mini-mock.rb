@@ -3,6 +3,11 @@ class MiniMockSink
     @called = []
   end
 
+  def args
+    raise "More than one call" if @called.size > 1
+    @called.first
+  end
+
   def called(args)
     @called << args
   end

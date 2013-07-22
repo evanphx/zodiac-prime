@@ -45,6 +45,12 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     def broadcast_vote_request(opts)
       @leader_request = opts
     end
+
+    def reset_index(term)
+    end
+
+    def broadcast_entries(opts)
+    end
   end
 
   def setup
@@ -376,6 +382,53 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
 
     node.become_follower
     assert_equal t, node.election_timeout
+  end
+
+  def test_become_follower_doesnt_reset_timer_on_request
+    t = Time.now
+
+    node.election_timeout = t
+    node.become_follower false
+
+    assert_equal t, node.election_timeout
+  end
+
+  ## become_leader
+
+  def test_become_leader_sets_role
+    node.become_leader
+
+    assert_equal :leader, node.role
+  end
+
+  def test_become_leader_sets_next_index
+    m = @cluster.mock(:reset_index)
+
+    node.log = [log_entry(0)]
+    node.become_leader
+
+    assert_called m
+    assert_equal [1], m.args
+  end
+
+  def test_become_leader_sends_heartbeat
+    node.current_term = 3
+    node.log = [log_entry(0), log_entry(3)]
+
+    m = @cluster.mock(:broadcast_entries)
+
+    node.become_leader
+
+    opts = {
+      :term => node.current_term,
+      :leader_id => node.node_id,
+      :prev_log_index => 1,
+      :prev_log_term => 3,
+      :entries => [],
+      :commit_index => nil
+    }
+
+    assert_equal [opts], m.args
   end
   
 end

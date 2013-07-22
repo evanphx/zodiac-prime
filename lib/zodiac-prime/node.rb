@@ -103,6 +103,22 @@ module ZodiacPrime
       end
     end
 
+    def become_leader
+      @role = :leader
+      @cluster.reset_index @log.size
+
+      opts = {
+        :term => @current_term,
+        :leader_id => @node_id,
+        :prev_log_index => (@log.empty? ? nil : @log.size - 1),
+        :prev_log_term  => (@log.empty? ? nil : @log.last.term),
+        :entries => [],
+        :commit_index => nil
+      }
+
+      @cluster.broadcast_entries opts
+    end
+
     def become_candidate
       @role = :candidate
       @current_term += 1
