@@ -5,7 +5,13 @@ require "zodiac-prime/log_entry"
 require "zodiac-prime/test"
 require "zodiac-prime/election"
 
+require 'mini-mock'
+
 class TestZodiacPrimeNode < Test::Unit::TestCase
+  def assert_called(m, count=1)
+    assert_equal count, m.times_called
+  end
+
   def new_node(id)
     ZodiacPrime::Node.new(id, @handler, @timer, @cluster)
   end
@@ -91,10 +97,11 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     t = Time.now + 2
     @timer.next = t
 
+    m = node.mock(:become_follower)
+
     node.request_vote :term => 1, :candidate_id => 1, :last_log_index => 0, :last_log_term => 0
-  
-    assert_equal :follower, node.role
-    assert_equal t, node.election_timeout
+
+    assert_called m
   end
 
   def test_request_vote_doesnt_change_voted_for_with_outstanding_vote
@@ -127,10 +134,12 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
 
     node.log = [log_entry(1)]
 
+    m = node.mock(:become_follower)
+
     res = node.request_vote :term => 2, :candidate_id => 1, :last_log_index => 1, :last_log_term => 0
 
     assert_equal false, res[:vote_granted]
-    assert_equal :follower, node.role
+    assert_called m
   end
 
   def test_request_vote_doesnt_resets_timer_even_if_log_check_fails
@@ -178,12 +187,13 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     t = Time.now + 2
     @timer.next = t
 
+    m = node.mock(:become_follower)
+
     node.role = :leader
     node.append_entries :term => 1, :prev_log_index => 0,
                                     :prev_log_term => 0
 
-    assert_equal :follower, node.role
-    assert_equal t, node.election_timeout
+    assert_called m
   end
 
   def test_append_entries_fails_if_prev_term_check_fails
@@ -344,13 +354,11 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     e.receive_vote 2, :term => 1, :vote_granted => true
     node.role = :candidate
 
-    t = Time.now + 2
-    @timer.next = t
+    m = node.mock(:become_follower)
 
     node.election_update e
 
-    assert_equal :follower, node.role
-    assert_equal t, node.election_timeout
+    assert_called m
   end
 
   ## become_follower
