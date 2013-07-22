@@ -41,12 +41,10 @@ module ZodiacPrime
         return { :term => @current_term, :vote_granted => false }
       end
 
-      reset_timer = false
       if opts[:term] > @current_term
         @current_term = opts[:term]
         if @role != :follower
-          become_follower
-          reset_timer = true
+          become_follower(false)
         end
       end
 
@@ -54,7 +52,7 @@ module ZodiacPrime
         return { :term => @current_term, :vote_granted => false }
       end
 
-      @election_timeout = @timer.next unless reset_timer
+      @election_timeout = @timer.next
       @voted_for = opts[:candidate_id]
       @current_term = opts[:term]
 
@@ -120,9 +118,9 @@ module ZodiacPrime
       @cluster.broadcast_vote_request opts
     end
 
-    def become_follower
+    def become_follower(reset_timer=true)
       @role = :follower
-      @election_timeout = @timer.next
+      @election_timeout = @timer.next if reset_timer
     end
 
     def election_update(election)

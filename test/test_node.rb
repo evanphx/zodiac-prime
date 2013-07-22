@@ -133,6 +133,22 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
     assert_equal :follower, node.role
   end
 
+  def test_request_vote_doesnt_resets_timer_even_if_log_check_fails
+    t = Time.now + 2
+    @timer.next = t
+
+    node = new_node(1)
+    node.role = :candidate
+    assert_equal t, node.election_timeout
+
+    node.log = [log_entry(1)]
+
+    res = node.request_vote :term => 2, :candidate_id => 1, :last_log_index => 1, :last_log_term => 0
+
+    assert_equal false, res[:vote_granted]
+    assert_equal t, node.election_timeout
+  end
+
   def test_request_vote_resets_election_timer
     t = Time.now + 0.200
     @timer.next = t
