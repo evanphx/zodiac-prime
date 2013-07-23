@@ -146,5 +146,46 @@ module ZodiacPrime
         @role = :leader
       end
     end
+
+    def accept_command(cmd)
+      prev_index = nil
+      prev_term = nil
+
+      unless @log.empty?
+        prev_index = @log.size - 1
+        prev_term = @log.last.term
+      end
+
+      log = LogEntry.new(@current_term, cmd)
+
+      @log << log
+
+      opts = {
+        :term => @current_term,
+        :leader_id => @node_id,
+        :prev_log_index => prev_index,
+        :prev_log_term  => prev_term,
+        :entries => [log],
+        :commit_index => nil
+      }
+
+      @cluster.broadcast_entries opts
+    end
+
+    def majority_accepted(idx)
+      entry = @log.at(idx)
+      @handler << entry.command
+
+      opts = {
+        :term => @current_term,
+        :leader_id => @node_id,
+        :prev_log_index => @log.size - 1,
+        :prev_log_term  => @log.last.term,
+        :entries => [],
+        :commit_index => idx
+      }
+
+      @cluster.broadcast_entries opts
+    end
   end
 end

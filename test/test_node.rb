@@ -430,5 +430,86 @@ class TestZodiacPrimeNode < Test::Unit::TestCase
 
     assert_equal [opts], m.args
   end
+
+  def test_accept_command_append_to_log
+    cur = node.log.size
+
+    node.accept_command :foo
+
+    assert_equal cur + 1, node.log.size
+    assert_equal :foo, node.log.last.command
+    assert_equal 0, node.log.last.term
+  end
+
+  def test_accept_command_transmits_command
+    m = @cluster.mock(:broadcast_entries)
+
+    node.accept_command :foo
+
+    opts = {
+      :term => node.current_term,
+      :leader_id => node.node_id,
+      :prev_log_index => nil,
+      :prev_log_term => nil,
+      :entries => [node.log.last],
+      :commit_index => nil
+    }
+
+    assert_equal [opts], m.args
+  end
+
+  def test_accept_command_transmits_command_when_there_are_already_logs
+    node.log = [log_entry(0), log_entry(0)]
+
+    m = @cluster.mock(:broadcast_entries)
+
+    node.accept_command :foo
+
+    opts = {
+      :term => node.current_term,
+      :leader_id => node.node_id,
+      :prev_log_index => 1,
+      :prev_log_term => 0,
+      :entries => [node.log.last],
+      :commit_index => nil
+    }
+
+    assert_equal [opts], m.args
+  end
+
+  def test_majority_accepted_writes_commands_to_handler
+    node.log = [log_entry(0, :foo)]
+
+    node.majority_accepted 0
+
+    assert_equal [:foo], @handler
+  end
+  
+  def test_majority_accepted_writes_command_at_log_index
+    node.log = [log_entry(0, :foo), log_entry(0, :blah)]
+
+    node.majority_accepted 0
+
+    assert_equal [:foo], @handler
+  end
+  
+  def test_majority_accepted_broadcasts_commit
+    node.log = [log_entry(0, :foo)]
+
+    m = @cluster.mock(:broadcast_entries)
+
+    node.majority_accepted 0
+
+    opts = {
+      :term => node.current_term,
+      :leader_id => node.node_id,
+      :prev_log_index => 0,
+      :prev_log_term => 0,
+      :entries => [],
+      :commit_index => 0
+    }
+
+    assert_equal [opts], m.args
+  end
   
 end
