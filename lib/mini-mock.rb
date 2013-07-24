@@ -27,7 +27,8 @@ class Object
 
     m = (class << self; self; end)
 
-    m.send :define_method, method do |*args|
+    m.send :define_method, method do |*args, &blk|
+      args << blk if blk
       sink.called args
     end
 
